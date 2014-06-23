@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <X11/keysym.h>
@@ -27,7 +28,7 @@ typedef struct {
 	int screen;
 	Window root, win;
 	Pixmap pmap;
-	unsigned long colors[2];
+	unsigned long colors[7];
 } Lock;
 
 static Lock **locks;
@@ -103,10 +104,12 @@ readpw(Display *dpy, const char *pws)
 	char buf[32], passwd[256];
 	int num, screen;
 	unsigned int len, llen;
+	unsigned int ci, lci;
 	KeySym ksym;
 	XEvent ev;
 
 	len = llen = 0;
+	ci = lci = 0;
 	running = True;
 
 	/* As "slock" stands for "Simple X display locker", the DPMS settings
@@ -153,9 +156,12 @@ readpw(Display *dpy, const char *pws)
 				}
 				break;
 			}
-			if(llen == 0 && len != 0) {
+			if(llen != len && len != 0) {
+				do {
+					ci = rand() % (sizeof(locks[screen]->colors) / sizeof(locks[screen]->colors[0]) - 1) + 1;
+				} while (ci == lci);
 				for(screen = 0; screen < nscreens; screen++) {
-					XSetWindowBackground(dpy, locks[screen]->win, locks[screen]->colors[1]);
+					XSetWindowBackground(dpy, locks[screen]->win, locks[screen]->colors[ci]);
 					XClearWindow(dpy, locks[screen]->win);
 				}
 			} else if(llen != 0 && len == 0) {
@@ -165,6 +171,7 @@ readpw(Display *dpy, const char *pws)
 				}
 			}
 			llen = len;
+			lci = ci;
 		}
 		else for(screen = 0; screen < nscreens; screen++)
 			XRaiseWindow(dpy, locks[screen]->win);
@@ -187,11 +194,15 @@ unlockscreen(Display *dpy, Lock *lock) {
 static Lock *
 lockscreen(Display *dpy, int screen) {
 	char curs[] = {0, 0, 0, 0, 0, 0, 0, 0};
+	char* colors[] = {"black", "#005577", "#007755", "#550077", "#557700", "#770055", "#775500"};
+	unsigned int i;
 	unsigned int len;
 	Lock *lock;
 	XColor color, dummy;
 	XSetWindowAttributes wa;
 	Cursor invisible;
+
+	srand(time(NULL));
 
 	if(dpy == NULL || screen < 0)
 		return NULL;
@@ -210,10 +221,10 @@ lockscreen(Display *dpy, int screen) {
 	lock->win = XCreateWindow(dpy, lock->root, 0, 0, DisplayWidth(dpy, lock->screen), DisplayHeight(dpy, lock->screen),
 			0, DefaultDepth(dpy, lock->screen), CopyFromParent,
 			DefaultVisual(dpy, lock->screen), CWOverrideRedirect | CWBackPixel, &wa);
-	XAllocNamedColor(dpy, DefaultColormap(dpy, lock->screen), COLOR2, &color, &dummy);
-	lock->colors[1] = color.pixel;
-	XAllocNamedColor(dpy, DefaultColormap(dpy, lock->screen), COLOR1, &color, &dummy);
-	lock->colors[0] = color.pixel;
+	for(i = 0; i < sizeof(colors) / sizeof(colors[0]); i++) {
+		XAllocNamedColor(dpy, DefaultColormap(dpy, lock->screen), colors[i], &color, &dummy);
+		lock->colors[i] = color.pixel;
+	}
 	lock->pmap = XCreateBitmapFromData(dpy, lock->win, curs, 8, 8);
 	invisible = XCreatePixmapCursor(dpy, lock->pmap, lock->pmap, &color, &color, 0, 0);
 	XDefineCursor(dpy, lock->win, invisible);
