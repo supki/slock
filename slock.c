@@ -130,8 +130,7 @@ readpw(Display *dpy, const char *pws)
 					|| IsMiscFunctionKey(ksym) || IsPFKey(ksym)
 					|| IsPrivateKeypadKey(ksym))
 				continue;
-			switch(ksym) {
-			case XK_Return:
+			if (ksym == XK_Return || (ksym == XK_j && (ev.xkey.state & ControlMask))) {
 				passwd[len] = 0;
 #ifdef HAVE_BSD_AUTH
 				running = !auth_userokay(getlogin(), NULL, "auth-xlock", passwd);
@@ -141,20 +140,16 @@ readpw(Display *dpy, const char *pws)
 				if(running)
 					XBell(dpy, 100);
 				len = 0;
-				break;
-			case XK_Escape:
+			} else if (ksym == XK_Escape) {
 				len = 0;
-				break;
-			case XK_BackSpace:
+			} else if (ksym == XK_BackSpace) {
 				if(len)
 					--len;
-				break;
-			default:
+			} else {
 				if(num && !iscntrl((int) buf[0]) && (len + num < sizeof passwd)) {
 					memcpy(passwd + len, buf, num);
 					len += num;
 				}
-				break;
 			}
 			if(llen != len && len != 0) {
 				do {
